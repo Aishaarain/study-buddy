@@ -4,6 +4,16 @@ import tailwindcss from '@tailwindcss/vite'
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
-
-}
-)
+  base: '/',
+  build: {
+    outDir: 'dist',
+    chunkSizeWarningLimit: 1000, // fixes the warning you saw
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vendor: ['react', 'react-dom'], // splits vendor bundle = faster load
+        }
+      }
+    }
+  }
+})
