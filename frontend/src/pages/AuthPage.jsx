@@ -487,7 +487,7 @@ export default function AuthPage() {
 
       <main className="fixed inset-0 z-10 flex min-h-screen w-full flex-col items-stretch justify-start gap-5 overflow-y-auto overflow-x-hidden bg-[#03010f]/20 px-4 py-6 font-['Syne'] text-white md:flex-row md:items-center md:justify-center md:gap-0 md:px-5">
         {/* Left Text Section */}
-        <section className="flex w-full items-center justify-center px-2 py-3 text-center md:max-w-[560px] md:flex-1 md:px-6 md:py-8 md:text-left">
+        <section className="flex w-full items-center justify-center px-2 pt-16 py-3 text-center md:max-w-[560px] md:flex-1 md:px-6 md:py-8 md:text-left md:pt-0">
           <div className="mx-auto w-full max-w-[470px] md:mx-0">
             <div className="mb-5 flex items-center justify-center gap-3 md:mb-7 md:justify-start">
               <span className="text-2xl text-violet-400 drop-shadow-[0_0_8px_#7c5cfc]">
