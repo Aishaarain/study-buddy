@@ -485,9 +485,20 @@ export default function AuthPage() {
     <>
       <AuthScene />
 
-      <main className="fixed inset-0 z-10 flex min-h-screen w-full flex-col items-stretch justify-start gap-5 overflow-y-auto overflow-x-hidden bg-[#03010f]/20 px-4 py-6 font-['Syne'] text-white md:flex-row md:items-center md:justify-center md:gap-0 md:px-5 pt-16">
-        {/* Left Text Section */}
-        <section className="relative z-20 pt-16flex w-full items-center justify-center px-2 pt-16 py-3 text-center md:max-w-[560px] md:flex-1 md:px-6 md:py-8 md:text-left  md:pt-0">
+      {/*
+        FIX 1: Removed `justify-start` and `pt-16` from main.
+                Added `justify-center` for both mobile and desktop so content
+                is always vertically centred in the viewport.
+                Used `py-8` for a comfortable scroll buffer top/bottom.
+      */}
+      <main className="fixed inset-0 z-10 flex min-h-screen w-full flex-col items-center justify-center gap-5 overflow-y-auto overflow-x-hidden bg-[#03010f]/20 px-4 py-8 font-['Syne'] text-white md:flex-row md:items-center md:justify-center md:gap-0 md:px-5">
+
+        {/* Left Text Section
+            FIX 2: Removed the `pt-16flex` typo (which broke `display:flex` AND
+                    added unwanted top padding) and removed the duplicate `pt-16`.
+                    Section now uses `flex` correctly and has balanced `py-4` padding.
+        */}
+        <section className="relative z-20 flex w-full items-center justify-center px-2 py-4 text-center md:max-w-[560px] md:flex-1 md:px-6 md:py-8 md:text-left md:pt-0">
           <div className="mx-auto w-full max-w-[470px] md:mx-0">
             <div className="mb-5 flex items-center justify-center gap-3 md:mb-7 md:justify-start">
               <span className="text-2xl text-violet-400 drop-shadow-[0_0_8px_#7c5cfc]">
@@ -657,10 +668,6 @@ export default function AuthPage() {
                   'Start Studying →'
                 )}
               </button>
-
-        
-
-             
             </div>
           </div>
         </section>
