@@ -1,6 +1,32 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
+import { checkAndIncrementUsage, getUsage } from '../lib/usageLimits';
 import toast from 'react-hot-toast';
+
+/* ─── Quota Bar Component ─────────────────────────────────────────── */
+function QuotaBar({ used, max }) {
+  const pct = Math.min((used / max) * 100, 100);
+  const isNearLimit = used >= max - 1;
+  const isAtLimit = used >= max;
+
+  return (
+    <div className="flex items-center gap-3">
+      <span className={`font-['Syne'] text-[11px] font-semibold ${
+        isAtLimit ? 'text-red-400' : isNearLimit ? 'text-amber-400' : 'text-red-300/70'
+      }`}>
+        {used}/{max} sets today
+      </span>
+      <div className="h-1.5 w-24 overflow-hidden rounded-full bg-red-400/15">
+        <div
+          className={`h-full rounded-full transition-all duration-500 ${
+            isAtLimit ? 'bg-red-500' : isNearLimit ? 'bg-amber-400' : 'bg-gradient-to-r from-red-500 to-pink-400'
+          }`}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+    </div>
+  );
+}
 
 export default function Flashcards() {
   const [sets, setSets] = useState([]);
@@ -8,109 +34,106 @@ export default function Flashcards() {
   const [selectedDocId, setSelectedDocId] = useState('');
   const [activeSet, setActiveSet] = useState(null);
   const [currentCard, setCurrentCard] = useState(0);
+  const [flipped, setFlipped] = useState(false);
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState('list');
-  const [cardCount, setCardCount] = useState(10); // ✅ separate number state, no object
+  const [generateForm, setGenerateForm] = useState({ count: 10 });
+
+  // ── Quota state ──
+  const [quotaUsed, setQuotaUsed] = useState(0);
+  const [quotaMax, setQuotaMax] = useState(3);
+  const [userId, setUserId] = useState(null);
 
   useEffect(() => {
     loadSets();
     loadDocuments();
+    initUser();
   }, []);
+
+  // ── Fetch user & quota on mount ──
+  const initUser = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    setUserId(user.id);
+    const usage = await getUsage(user.id, 'flashcard');
+    setQuotaUsed(usage.used);
+    setQuotaMax(usage.max);
+  };
 
   const loadDocuments = async () => {
     try {
       const { data, error } = await supabase
-        .from('documents')
-        .select('id, title, status')
-        .eq('status', 'ready')
+        .from('documents').select('id, title, status').eq('status', 'ready')
         .order('created_at', { ascending: false });
-
       if (error) throw error;
       setDocuments(data || []);
-    } catch {
-      // silent
-    }
+    } catch { /* silent */ }
   };
 
   const loadSets = async () => {
     try {
       const { data, error } = await supabase
-        .from('flashcard_sets')
-        .select('id, title, created_at, flashcards(count)')
+        .from('flashcard_sets').select('id, title, created_at, flashcards(count)')
         .order('created_at', { ascending: false });
-
       if (error) throw error;
-
       setSets(
         (data || []).map((s) => ({
           _id: s.id,
           title: s.title,
-          cardCount: s.flashcards?.[0]?.count || 0,
+          cards: { length: s.flashcards?.[0]?.count || 0 },
         }))
       );
-    } catch {
-      // silent
-    }
+    } catch { /* silent */ }
   };
 
   const loadFullSet = async (setId) => {
     const { data: set, error: setError } = await supabase
-      .from('flashcard_sets')
-      .select('*')
-      .eq('id', setId)
-      .single();
-
+      .from('flashcard_sets').select('*').eq('id', setId).single();
     if (setError) throw setError;
 
     const { data: cards, error: cardsError } = await supabase
-      .from('flashcards')
-      .select('*')
-      .eq('set_id', setId)
+      .from('flashcards').select('*').eq('set_id', setId)
       .order('order_index', { ascending: true });
-
     if (cardsError) throw cardsError;
 
     return {
       _id: set.id,
       title: set.title,
-      cards: (cards || []).map((c) => ({
-        _id: c.id,
-        front: c.front,
-        back: c.back,
-        known: false,
-      })),
+      cards: (cards || []).map((c) => ({ _id: c.id, front: c.front, back: c.back, known: false })),
     };
   };
 
   const handleGenerate = async () => {
     if (!selectedDocId) return toast.error('Select a document');
 
-    // ✅ parse to integer and clamp between 3–30
-    const count = Math.min(30, Math.max(3, parseInt(cardCount, 10) || 10));
-
-    console.log('Generating flashcards — count:', count);
+    // ── Check quota before generating ──
+    if (!userId) return;
+    try {
+      const usage = await checkAndIncrementUsage(userId, 'flashcard');
+      setQuotaUsed(usage.used);
+    } catch (err) {
+      toast.error(err.message);
+      return;
+    }
 
     setLoading(true);
     try {
       const { data, error } = await supabase.functions.invoke('generate-flashcards', {
-        body: {
-          documentId: selectedDocId,
-          cardCount: count,
-        },
+        body: { documentId: selectedDocId, cardCount: generateForm.count },
       });
-
       if (error) throw error;
-      if (!data?.setId) throw new Error('No setId returned from function');
 
-      toast.success(`${count} flashcards generated!`);
+      toast.success('Flashcards generated!');
       await loadSets();
-
       const fullSet = await loadFullSet(data.setId);
       setActiveSet(fullSet);
       setCurrentCard(0);
+      setFlipped(false);
       setStep('view');
     } catch (err) {
       toast.error(err.message || 'Generation failed');
+      // Roll back quota on failure
+      setQuotaUsed((prev) => Math.max(prev - 1, 0));
     } finally {
       setLoading(false);
     }
@@ -121,6 +144,7 @@ export default function Flashcards() {
       const fullSet = await loadFullSet(set._id);
       setActiveSet(fullSet);
       setCurrentCard(0);
+      setFlipped(false);
       setStep('view');
     } catch {
       toast.error('Failed to load set');
@@ -129,20 +153,21 @@ export default function Flashcards() {
 
   const handleNext = () => {
     if (!activeSet) return;
+    setFlipped(false);
     setCurrentCard((prev) => (prev + 1) % activeSet.cards.length);
   };
 
   const handlePrev = () => {
     if (!activeSet) return;
+    setFlipped(false);
     setCurrentCard((prev) => (prev - 1 + activeSet.cards.length) % activeSet.cards.length);
   };
 
   const toggleKnown = (cardId, known) => {
     if (!activeSet) return;
-    setActiveSet((prev) => ({
-      ...prev,
-      cards: prev.cards.map((c) => (c._id === cardId ? { ...c, known } : c)),
-    }));
+    const updated = { ...activeSet };
+    updated.cards = updated.cards.map((c) => (c._id === cardId ? { ...c, known } : c));
+    setActiveSet(updated);
   };
 
   const handleDelete = async (id) => {
@@ -151,75 +176,61 @@ export default function Flashcards() {
       if (error) throw error;
       toast.success('Deleted');
       loadSets();
-      if (activeSet?._id === id) {
-        setActiveSet(null);
-        setStep('list');
-      }
+      if (activeSet?._id === id) { setActiveSet(null); setStep('list'); }
     } catch {
       toast.error('Delete failed');
     }
   };
 
-  /* ── Generate Step ── */
+  const isAtLimit = quotaUsed >= quotaMax;
+
+  // ── Generate Step ──
   if (step === 'generate') {
     return (
-      <section className="min-h-screen overflow-x-hidden px-4 py-8 text-white">
-        <h1 className="mb-8 font-orbitron text-3xl font-black tracking-[.15em]">
+      <section className="min-h-screen p-8 text-white">
+        <h1 className="mb-2 font-orbitron text-3xl font-black tracking-[.15em]">
           GENERATE <span className="text-red-400">FLASHCARDS</span>
         </h1>
-        <div className="mx-auto max-w-lg rounded-2xl border border-red-400/30 bg-red-400/5 p-6 backdrop-blur">
 
+        {/* Quota bar on generate page */}
+        <div className="mb-6 flex items-center gap-3">
+          <QuotaBar used={quotaUsed} max={quotaMax} />
+          <span className="text-[11px] text-slate-500">· Free tier: 3 sets/day</span>
+        </div>
+
+        {/* Limit banner */}
+        {isAtLimit && (
+          <div className="mb-6 rounded-2xl border border-red-400/30 bg-red-500/10 px-5 py-4 text-center">
+            <p className="text-sm font-bold text-red-300">🚫 You've used all 3 flashcard generations for today.</p>
+            <p className="mt-1 text-xs text-slate-400">Your quota resets at midnight. Come back tomorrow!</p>
+          </div>
+        )}
+
+        <div className="mx-auto max-w-lg rounded-2xl border border-red-400/30 bg-red-400/5 p-8 backdrop-blur">
           <div className="mb-6">
-            <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-red-300">
-              Document
-            </label>
-            <select
-              value={selectedDocId}
-              onChange={(e) => setSelectedDocId(e.target.value)}
-              className="w-full rounded-xl border border-red-400/30 bg-red-400/10 px-4 py-3 text-sm text-white focus:border-red-400 focus:outline-none"
-            >
+            <label className="mb-2 block text-xs uppercase tracking-wider text-red-300 font-bold">Document</label>
+            <select value={selectedDocId} onChange={(e) => setSelectedDocId(e.target.value)}
+              className="w-full rounded-xl border border-red-400/30 bg-red-400/10 px-4 py-3 text-sm text-white focus:border-red-400 focus:outline-none">
               <option value="">Select a document...</option>
               {documents.map((doc) => (
-                <option key={doc.id} value={doc.id}>
-                  {doc.title}
-                </option>
+                <option key={doc.id} value={doc.id}>{doc.title}</option>
               ))}
             </select>
             {documents.length === 0 && (
-              <p className="mt-2 text-xs text-red-300/60">
-                No processed documents yet — upload one first.
-              </p>
+              <p className="mt-2 text-xs text-red-300/60">No processed documents yet — upload one first.</p>
             )}
           </div>
-
           <div className="mb-6">
-            <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-red-300">
-              Number of Cards (3–30)
-            </label>
-            <input
-              type="number"
-              min={3}
-              max={30}
-              value={cardCount}
-              onChange={(e) => setCardCount(Number(e.target.value))}
-              className="w-full rounded-xl border border-red-400/30 bg-red-400/10 px-4 py-3 text-sm text-white focus:border-red-400 focus:outline-none"
-            />
-            <p className="mt-1 text-xs text-red-300/50">
-              Will generate {Math.min(30, Math.max(3, cardCount || 3))} cards
-            </p>
+            <label className="mb-2 block text-xs uppercase tracking-wider text-red-300 font-bold">Number of Cards</label>
+            <input type="number" min={3} max={30} value={generateForm.count}
+              onChange={(e) => setGenerateForm((f) => ({ ...f, count: Number(e.target.value) }))}
+              className="w-full rounded-xl border border-red-400/30 bg-red-400/10 px-4 py-3 text-sm text-white focus:border-red-400 focus:outline-none" />
           </div>
-
-          <button
-            onClick={handleGenerate}
-            disabled={loading}
-            className="w-full rounded-xl bg-gradient-to-r from-red-500 to-pink-500 px-6 py-3 font-bold transition hover:scale-105 disabled:opacity-50"
-          >
-            {loading ? 'Generating...' : `Generate ${Math.min(30, Math.max(3, cardCount || 3))} Cards`}
+          <button onClick={handleGenerate} disabled={loading || isAtLimit}
+            className="w-full rounded-xl bg-gradient-to-r from-red-500 to-pink-500 px-6 py-3 font-bold transition hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed">
+            {loading ? 'Generating...' : isAtLimit ? 'Daily Limit Reached' : 'Generate'}
           </button>
-          <button
-            onClick={() => setStep('list')}
-            className="mt-3 w-full rounded-xl border border-red-400/30 bg-red-400/10 px-4 py-2 text-sm font-bold transition hover:bg-red-400/15"
-          >
+          <button onClick={() => setStep('list')} className="mt-3 w-full rounded-xl border border-red-400/30 bg-red-400/10 px-4 py-2 text-sm font-bold hover:bg-red-400/15 transition">
             Back to Sets
           </button>
         </div>
@@ -227,100 +238,95 @@ export default function Flashcards() {
     );
   }
 
-  /* ── View Step ── */
+  // ── View Step ──
   if (step === 'view' && activeSet) {
     const card = activeSet.cards[currentCard];
     return (
-      <section className="min-h-screen overflow-x-hidden px-4 py-8 text-white">
-        <div className="mx-auto w-full max-w-lg">
+      <section className="min-h-screen p-8 text-white">
+        <div className="mx-auto max-w-lg">
           <div className="mb-6 text-center">
             <h1 className="font-orbitron text-2xl font-bold text-red-300">{activeSet.title}</h1>
-            <p className="mt-1 text-sm text-slate-400">{activeSet.cards.length} cards</p>
+            <p className="mt-1 text-md text-slate-400">{activeSet.cards.length} cards</p>
           </div>
 
           <div className="flex flex-col items-center gap-6">
-            <div className="w-full max-w-full rounded-2xl border border-red-400/30 bg-gradient-to-br from-red-500/20 to-pink-500/10 p-6 backdrop-blur">
-              <p className="mb-4 text-center text-xs font-bold uppercase tracking-wider text-red-300/70">
-                {card.front}
-              </p>
-              <p className="text-center text-base leading-relaxed text-slate-100">{card.back}</p>
+            {/* Card with flip */}
+            <div
+              onClick={() => setFlipped((f) => !f)}
+              className="relative min-h-72 w-full cursor-pointer"
+              style={{ perspective: '1000px' }}
+            >
+              <div
+                className="relative min-h-72 w-full rounded-2xl border border-red-400/30 bg-gradient-to-br from-red-500/20 to-pink-500/10 p-8 backdrop-blur flex flex-col items-center justify-center transition-transform duration-500"
+                style={{ transformStyle: 'preserve-3d', transform: flipped ? 'rotateY(180deg)' : 'rotateY(0deg)' }}
+              >
+                {/* Front */}
+                <div className="absolute inset-0 flex flex-col items-center justify-center p-8 text-center" style={{ backfaceVisibility: 'hidden' }}>
+                  <p className="mb-3 text-xs uppercase tracking-wider text-red-300/70 font-bold">Question</p>
+                  <p className="text-lg font-bold leading-relaxed text-slate-100">{card.front}</p>
+                  <p className="mt-6 text-xs text-red-300/30">Click to flip</p>
+                </div>
+                {/* Back */}
+                <div className="absolute inset-0 flex flex-col items-center justify-center p-8 text-center" style={{ backfaceVisibility: 'hidden', transform: 'rotateY(180deg)' }}>
+                  <p className="mb-3 text-xs uppercase tracking-wider text-red-300/70 font-bold">Answer</p>
+                  <p className="text-base leading-relaxed text-slate-100">{card.back}</p>
+                  <p className="mt-6 text-xs text-red-300/30">Click to flip back</p>
+                </div>
+              </div>
             </div>
 
             <div className="flex items-center gap-3">
-              <span
-                className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs ${
-                  card.known ? 'bg-green-500/20 text-green-300' : 'bg-slate-500/20 text-slate-400'
-                }`}
-              >
+              <span className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs ${card.known ? 'bg-green-500/20 text-green-300' : 'bg-slate-500/20 text-slate-400'}`}>
                 {card.known ? '✓ Known' : 'Learning'}
               </span>
               {card._id && (
-                <button
-                  onClick={() => toggleKnown(card._id, !card.known)}
-                  className="rounded-xl border border-red-400/30 bg-red-400/10 px-3 py-1 text-xs transition hover:bg-red-400/20"
-                >
+                <button onClick={() => toggleKnown(card._id, !card.known)}
+                  className="rounded-xl border border-red-400/30 bg-red-400/10 px-3 py-1 text-xs hover:bg-red-400/20 transition">
                   Mark {card.known ? 'Unknown' : 'Known'}
                 </button>
               )}
             </div>
 
-            <p className="text-xs text-slate-400">
-              {currentCard + 1} / {activeSet.cards.length}
-            </p>
-
-            <div className="flex w-full justify-center gap-4">
-              <button
-                onClick={handlePrev}
-                className="rounded-xl border border-red-400/30 bg-red-400/10 px-6 py-3 font-bold transition hover:bg-red-400/20"
-              >
-                ← Prev
-              </button>
-              <button
-                onClick={handleNext}
-                className="rounded-xl bg-gradient-to-r from-red-500 to-pink-500 px-6 py-3 font-bold transition hover:scale-105"
-              >
-                Next →
-              </button>
+            <div className="flex gap-4">
+              <button onClick={handlePrev} className="rounded-xl border border-red-400/30 bg-red-400/10 px-6 py-3 font-bold hover:bg-red-400/20 transition">← Prev</button>
+              <button onClick={handleNext} className="rounded-xl bg-gradient-to-r from-red-500 to-pink-500 px-6 py-3 font-bold transition hover:scale-105">Next →</button>
             </div>
 
-            <div className="h-1 w-full overflow-hidden rounded-full bg-red-400/10">
-              <div
-                className="h-full bg-gradient-to-r from-red-500 to-pink-500 transition-all duration-300"
-                style={{ width: `${((currentCard + 1) / activeSet.cards.length) * 100}%` }}
-              />
+            {/* Progress bar */}
+            <div className="w-full rounded-full bg-red-400/10 h-1 overflow-hidden">
+              <div className="h-full bg-gradient-to-r from-red-500 to-pink-500 transition-all duration-300"
+                style={{ width: `${((currentCard + 1) / activeSet.cards.length) * 100}%` }} />
             </div>
+            <p className="text-xs text-slate-500">{currentCard + 1} / {activeSet.cards.length}</p>
 
-            <button
-              onClick={() => setStep('list')}
-              className="text-xs text-slate-400 transition hover:text-slate-300"
-            >
-              ← Back to Sets
-            </button>
+            <button onClick={() => setStep('list')} className="text-xs text-slate-400 hover:text-slate-300 transition">← Back to Sets</button>
           </div>
         </div>
       </section>
     );
   }
 
-  /* ── List Step ── */
+  // ── List Step ──
   return (
-    <section className="min-h-screen overflow-x-hidden px-4 py-8 text-white">
-      <div className="mb-8 flex flex-wrap items-center justify-between gap-3">
+    <section className="min-h-screen p-8 text-white">
+      <div className="mb-8 flex items-center justify-between">
         <div>
           <h1 className="font-orbitron text-3xl font-black tracking-[.15em]">
             FLASH <span className="text-red-400">CARDS</span>
           </h1>
-          <p className="mt-1 text-sm text-slate-400">{sets.length} sets</p>
+          <div className="mt-2 flex items-center gap-3">
+            <p className="text-md text-slate-400">{sets.length} sets</p>
+            <span className="text-slate-600">·</span>
+            <QuotaBar used={quotaUsed} max={quotaMax} />
+          </div>
+          <p className="mt-1 text-[11px] text-slate-500">Free tier: 3 flashcard sets/day</p>
         </div>
         <button
-          onClick={() => {
-            setStep('generate');
-            setCardCount(10);
-            setSelectedDocId('');
-          }}
-          className="rounded-xl bg-gradient-to-r from-red-500 to-pink-500 px-4 py-2 text-sm font-bold shadow-[0_0_20px_rgba(255,107,107,.3)] transition hover:scale-105"
+          onClick={() => { setStep('generate'); setGenerateForm({ count: 10 }); }}
+          disabled={isAtLimit}
+          className="rounded-xl bg-gradient-to-r from-red-500 to-pink-500 px-6 py-3 font-bold transition hover:scale-105 shadow-[0_0_20px_rgba(255,107,107,.3)] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
         >
-          + New Set
+          {isAtLimit ? '🚫 Limit Reached' : '+ New Set'}
         </button>
       </div>
 
@@ -331,25 +337,14 @@ export default function Flashcards() {
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {sets.map((set) => (
-            <div
-              key={set._id}
-              className="min-w-0 rounded-2xl border border-red-400/20 bg-red-400/5 p-6 backdrop-blur transition hover:bg-red-400/10"
-            >
-              <h3 className="truncate font-orbitron text-sm font-bold text-red-200">
-                {set.title}
-              </h3>
-              <p className="mt-2 text-sm text-slate-400">{set.cardCount || 0} cards</p>
+            <div key={set._id} className="rounded-2xl border border-red-400/20 bg-red-400/5 p-6 backdrop-blur transition hover:bg-red-400/10">
+              <h3 className="font-orbitron text-md font-bold text-red-200 truncate">{set.title}</h3>
+              <p className="mt-2 text-md text-slate-400">{set.cards?.length || 0} cards</p>
               <div className="mt-4 flex gap-2">
-                <button
-                  onClick={() => openSet(set)}
-                  className="flex-1 rounded-xl bg-gradient-to-r from-red-500 to-pink-500 px-4 py-2 text-xs font-bold transition hover:scale-105"
-                >
+                <button onClick={() => openSet(set)} className="flex-1 rounded-xl bg-gradient-to-r from-red-500 to-pink-500 px-4 py-2 text-xs font-bold transition hover:scale-105">
                   Study
                 </button>
-                <button
-                  onClick={() => handleDelete(set._id)}
-                  className="rounded-xl border border-red-400/30 px-4 py-2 text-xs text-red-400 transition hover:bg-red-400/10"
-                >
+                <button onClick={() => handleDelete(set._id)} className="rounded-xl border border-red-400/30 px-4 py-2 text-xs text-red-400 hover:bg-red-400/10 transition">
                   Delete
                 </button>
               </div>
