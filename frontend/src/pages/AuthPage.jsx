@@ -3,7 +3,6 @@ import * as THREE from 'three';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabaseClient';
 
-/* ─── Small Class Helper ───────────────────────────────────────────── */
 const cn = (...classes) => classes.filter(Boolean).join(' ');
 
 /* ─── Three.js Background Scene ────────────────────────────────────── */
@@ -14,15 +13,12 @@ function AuthScene() {
     const mount = mountRef.current;
     if (!mount) return;
 
-    const W = window.innerWidth;
-    const H = window.innerHeight;
-
     const renderer = new THREE.WebGLRenderer({
       antialias: true,
       alpha: true,
     });
 
-    renderer.setSize(W, H);
+    renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.2;
@@ -32,7 +28,13 @@ function AuthScene() {
     const scene = new THREE.Scene();
     scene.fog = new THREE.FogExp2(0x03010f, 0.025);
 
-    const camera = new THREE.PerspectiveCamera(70, W / H, 0.1, 500);
+    const camera = new THREE.PerspectiveCamera(
+      70,
+      window.innerWidth / window.innerHeight,
+      0.1,
+      500
+    );
+
     camera.position.set(0, 2, 12);
 
     scene.add(new THREE.AmbientLight(0x0a0520, 2));
@@ -49,7 +51,6 @@ function AuthScene() {
     pLight3.position.set(3, 4, -4);
     scene.add(pLight3);
 
-    /* Stars */
     const starGeo = new THREE.BufferGeometry();
     const sv = [];
     const sc = [];
@@ -66,20 +67,11 @@ function AuthScene() {
       );
 
       const c = new THREE.Color();
-      c.setHSL(
-        0.62 + Math.random() * 0.25,
-        0.5,
-        0.65 + Math.random() * 0.35
-      );
-
+      c.setHSL(0.62 + Math.random() * 0.25, 0.5, 0.65 + Math.random() * 0.35);
       sc.push(c.r, c.g, c.b);
     }
 
-    starGeo.setAttribute(
-      'position',
-      new THREE.Float32BufferAttribute(sv, 3)
-    );
-
+    starGeo.setAttribute('position', new THREE.Float32BufferAttribute(sv, 3));
     starGeo.setAttribute('color', new THREE.Float32BufferAttribute(sc, 3));
 
     const starMat = new THREE.PointsMaterial({
@@ -93,7 +85,6 @@ function AuthScene() {
     const stars = new THREE.Points(starGeo, starMat);
     scene.add(stars);
 
-    /* Central Floating Crystal */
     const crystalGroup = new THREE.Group();
     crystalGroup.position.set(3.5, 0.5, 0);
     scene.add(crystalGroup);
@@ -176,7 +167,6 @@ function AuthScene() {
       miniOrbs.push(m);
     }
 
-    /* Particles */
     const pCount = 120;
     const pGeo = new THREE.BufferGeometry();
     const pPos = new Float32Array(pCount * 3);
@@ -238,14 +228,16 @@ function AuthScene() {
       mouse.y = -(e.clientY / window.innerHeight - 0.5);
     };
 
-    window.addEventListener('mousemove', handleMouseMove);
-
     const handleResize = () => {
-      camera.aspect = window.innerWidth / window.innerHeight;
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+
+      camera.aspect = w / h;
       camera.updateProjectionMatrix();
-      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setSize(w, h);
     };
 
+    window.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('resize', handleResize);
 
     const clock = new THREE.Clock();
@@ -257,7 +249,12 @@ function AuthScene() {
       const delta = clock.getDelta();
       const t = clock.elapsedTime;
 
+      const isMobile = window.innerWidth < 768;
+
+      crystalGroup.position.x = isMobile ? 1.8 : 3.5;
       crystalGroup.position.y = 0.5 + Math.sin(t * 0.7) * 0.3;
+      crystalGroup.scale.setScalar(isMobile ? 0.75 : 1);
+
       crystalGroup.rotation.y += delta * 0.25;
 
       orb.material.emissiveIntensity = 0.3 + 0.2 * Math.sin(t * 2);
@@ -294,10 +291,6 @@ function AuthScene() {
       pGeo.attributes.position.needsUpdate = true;
       pMat.opacity = 0.5 + 0.4 * Math.sin(t * 2.5);
 
-      pLight1.intensity = 7 + 3 * Math.sin(t * 1.1);
-      pLight2.intensity = 4 + 2 * Math.sin(t * 0.8 + 1);
-      pLight3.intensity = 2.5 + 1.5 * Math.sin(t * 1.4 + 2);
-
       stars.rotation.y += 0.00003;
       starMat.opacity = 0.6 + 0.2 * Math.sin(t * 0.25);
 
@@ -315,6 +308,11 @@ function AuthScene() {
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('resize', handleResize);
 
+      starGeo.dispose();
+      starMat.dispose();
+      pGeo.dispose();
+      pMat.dispose();
+
       renderer.dispose();
 
       if (mount.contains(renderer.domElement)) {
@@ -323,7 +321,12 @@ function AuthScene() {
     };
   }, []);
 
-  return <div ref={mountRef} className="pointer-events-none fixed inset-0 z-0" />;
+  return (
+    <div
+      ref={mountRef}
+      className="pointer-events-none fixed inset-0 z-0 opacity-70 md:opacity-100"
+    />
+  );
 }
 
 /* ─── Auth Page ────────────────────────────────────────────────────── */
@@ -388,7 +391,9 @@ export default function AuthPage() {
     return Object.keys(e).length === 0;
   };
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
     if (!validate()) return;
 
     try {
@@ -417,9 +422,7 @@ export default function AuthPage() {
         if (error) throw error;
 
         if (!data.session) {
-          alert(
-            'Account created! Please check your email to confirm before logging in.'
-          );
+          alert('Account created! Please check your email to confirm before logging in.');
           setMode('login');
         } else {
           navigate('/landing');
@@ -455,9 +458,7 @@ export default function AuthPage() {
             className={cn(
               'w-full rounded-[10px] border bg-violet-400/10 px-4 py-3 font-["Syne"] text-sm text-[#e8e0ff] outline-none transition placeholder:text-violet-300/35 focus:border-violet-400/70 focus:ring-4 focus:ring-violet-500/15',
               isPasswordField && 'pr-12',
-              errors[field]
-                ? 'border-red-400/70'
-                : 'border-violet-400/25'
+              errors[field] ? 'border-red-400/70' : 'border-violet-400/25'
             )}
           />
 
@@ -482,35 +483,24 @@ export default function AuthPage() {
   };
 
   return (
-    <>
+    <div className="relative min-h-screen overflow-x-hidden bg-[#03010f] font-['Syne'] text-white">
       <AuthScene />
 
-      {/*
-        FIX 1: Removed `justify-start` and `pt-16` from main.
-                Added `justify-center` for both mobile and desktop so content
-                is always vertically centred in the viewport.
-                Used `py-8` for a comfortable scroll buffer top/bottom.
-      */}
-      <main className="fixed inset-0 z-10 flex min-h-screen w-full flex-col items-center justify-center gap-5 overflow-y-auto overflow-x-hidden bg-[#03010f]/20 px-4 py-8 font-['Syne'] text-white md:flex-row md:items-center md:justify-center md:gap-0 md:px-5">
-
-        {/* Left Text Section
-            FIX 2: Removed the `pt-16flex` typo (which broke `display:flex` AND
-                    added unwanted top padding) and removed the duplicate `pt-16`.
-                    Section now uses `flex` correctly and has balanced `py-4` padding.
-        */}
-        <section className="relative z-20 flex w-full items-center justify-center px-2 py-4 text-center md:max-w-[560px] md:flex-1 md:px-6 md:py-8 md:text-left md:pt-0">
-          <div className="mx-auto w-full max-w-[470px] md:mx-0">
-            <div className="mb-5 flex items-center justify-center gap-3 md:mb-7 md:justify-start">
+      <main className="relative z-10 mx-auto flex min-h-screen w-full max-w-[1280px] flex-col gap-8 px-4 py-6 sm:px-6 lg:grid lg:grid-cols-[minmax(0,1fr)_420px] lg:items-center lg:gap-10 lg:px-10 lg:py-8 xl:grid-cols-[minmax(0,1fr)_440px]">
+        {/* Left Section */}
+        <section className="w-full pt-4 text-center lg:pt-0 lg:text-left">
+          <div className="mx-auto w-full max-w-[720px] lg:mx-0">
+            <div className="mb-4 flex items-center justify-center gap-3 lg:mb-5 lg:justify-start">
               <span className="text-2xl text-violet-400 drop-shadow-[0_0_8px_#7c5cfc]">
                 ✦
               </span>
 
-              <span className="bg-gradient-to-r from-violet-400 to-cyan-400 bg-clip-text font-['Orbitron'] text-xl font-bold tracking-[2px] text-transparent">
+              <span className="bg-gradient-to-r from-violet-400 to-cyan-400 bg-clip-text font-['Orbitron'] text-lg font-bold tracking-[2px] text-transparent sm:text-xl">
                 StudyAI
               </span>
             </div>
 
-            <h1 className="m-0 font-['Orbitron'] text-[clamp(32px,10vw,46px)] font-extrabold leading-[1.12] tracking-[-0.5px] text-[#e8e0ff] md:text-[clamp(34px,4vw,50px)]">
+            <h1 className="font-['Orbitron'] text-[clamp(36px,11vw,56px)] font-extrabold leading-[1.05] tracking-[-1px] text-[#e8e0ff] lg:text-[clamp(48px,5vw,78px)]">
               Make Your
               <br />
               <span className="bg-gradient-to-r from-violet-400 via-cyan-400 to-pink-400 bg-clip-text text-transparent">
@@ -518,28 +508,28 @@ export default function AuthPage() {
               </span>
             </h1>
 
-            <p className="mx-auto mt-4 max-w-[95%] font-['Syne'] text-sm leading-7 text-violet-100/70 md:mx-0 md:max-w-none md:text-[15px]">
+            <p className="mx-auto mt-4 max-w-[620px] text-sm leading-7 text-violet-100/70 sm:text-[15px] lg:mx-0 lg:mt-5 lg:text-base">
               Upload your notes, textbooks, or slides — StudyAI transforms them
               into interactive quizzes, flashcards, and AI conversations that
               accelerate your understanding.
             </p>
 
-            <div className="mt-7 flex flex-col gap-3">
+            <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:mt-7">
               {features.map((feature, index) => (
                 <div
                   key={index}
-                  className="flex items-start gap-3 rounded-xl border border-violet-400/20 bg-violet-500/10 px-4 py-3 text-left transition hover:translate-x-1 hover:border-violet-400/40 hover:bg-violet-500/15"
+                  className="flex items-start gap-3 rounded-xl border border-violet-400/20 bg-violet-500/10 px-4 py-3 text-left backdrop-blur-md transition hover:border-violet-400/40 hover:bg-violet-500/15"
                 >
-                  <span className="mt-0.5 text-[22px] leading-none">
+                  <span className="mt-0.5 text-[21px] leading-none">
                     {feature.icon}
                   </span>
 
                   <div>
-                    <h3 className="mb-1 font-['Syne'] text-sm font-bold text-violet-200">
+                    <h3 className="mb-1 text-sm font-bold text-violet-200">
                       {feature.title}
                     </h3>
 
-                    <p className="m-0 font-['Syne'] text-xs leading-5 text-violet-100/55">
+                    <p className="text-xs leading-5 text-violet-100/55">
                       {feature.desc}
                     </p>
                   </div>
@@ -547,18 +537,18 @@ export default function AuthPage() {
               ))}
             </div>
 
-            <div className="mt-8 flex justify-center gap-6 md:justify-start">
+            <div className="mt-6 flex justify-center gap-6 lg:justify-start">
               {[
                 ['10K+', 'Students'],
                 ['500K+', 'Flashcards'],
                 ['98%', 'Satisfaction'],
               ].map(([number, label]) => (
                 <div key={label} className="text-center">
-                  <div className="bg-gradient-to-r from-violet-400 to-cyan-400 bg-clip-text font-['Orbitron'] text-xl font-extrabold text-transparent md:text-2xl">
+                  <div className="bg-gradient-to-r from-violet-400 to-cyan-400 bg-clip-text font-['Orbitron'] text-xl font-extrabold text-transparent sm:text-2xl">
                     {number}
                   </div>
 
-                  <div className="mt-1 font-['Syne'] text-[11px] text-violet-100/50">
+                  <div className="mt-1 text-[11px] text-violet-100/50">
                     {label}
                   </div>
                 </div>
@@ -568,9 +558,11 @@ export default function AuthPage() {
         </section>
 
         {/* Right Form Section */}
-        <section className="flex w-full items-center justify-center p-0 pb-8 md:w-auto md:max-w-[460px] md:p-5">
-          <div className="w-full max-w-[420px] overflow-hidden rounded-[20px] border border-violet-400/25 bg-[#08041c]/80 shadow-[0_0_60px_rgba(124,92,252,0.15),0_0_120px_rgba(0,229,255,0.05),inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-2xl">
-            {/* Tabs */}
+        <section className="flex w-full justify-center pb-6 lg:pb-0">
+          <form
+            onSubmit={handleSubmit}
+            className="w-full max-w-[420px] overflow-hidden rounded-[20px] border border-violet-400/25 bg-[#08041c]/85 shadow-[0_0_60px_rgba(124,92,252,0.15),0_0_120px_rgba(0,229,255,0.05),inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-2xl"
+          >
             <div className="flex border-b border-violet-400/20">
               {['login', 'register'].map((tabMode) => (
                 <button
@@ -592,73 +584,42 @@ export default function AuthPage() {
               ))}
             </div>
 
-            {/* Form Body */}
             <div className="px-5 py-6 sm:px-7 sm:py-7">
               {mode === 'login' ? (
                 <>
-                  <p className="mb-5 mt-0 font-['Syne'] text-sm text-violet-100/55">
+                  <p className="mb-5 text-sm text-violet-100/55">
                     Welcome back, ready to study?
                   </p>
 
-                  {renderInput(
-                    'email',
-                    'Email',
-                    'email',
-                    'you@university.edu'
-                  )}
-
-                  {renderInput(
-                    'password',
-                    'Password',
-                    'password',
-                    '••••••••'
-                  )}
+                  {renderInput('email', 'Email', 'email', 'you@university.edu')}
+                  {renderInput('password', 'Password', 'password', '••••••••')}
 
                   <div className="-mt-1 mb-1 text-right">
-                    <a
-                      href="#"
-                      className="font-['Syne'] text-xs text-violet-400/80 no-underline hover:text-violet-300"
+                    <button
+                      type="button"
+                      className="text-xs text-violet-400/80 hover:text-violet-300"
                     >
                       Forgot password?
-                    </a>
+                    </button>
                   </div>
                 </>
               ) : (
                 <>
-                  <p className="mb-5 mt-0 font-['Syne'] text-sm text-violet-100/55">
+                  <p className="mb-5 text-sm text-violet-100/55">
                     Create your free account.
                   </p>
 
                   {renderInput('name', 'Full Name', 'text', 'Ada Lovelace')}
-
-                  {renderInput(
-                    'email',
-                    'Email',
-                    'email',
-                    'you@university.edu'
-                  )}
-
-                  {renderInput(
-                    'password',
-                    'Password',
-                    'password',
-                    'Min 8 characters'
-                  )}
-
-                  {renderInput(
-                    'confirm',
-                    'Confirm Password',
-                    'password',
-                    'Repeat password'
-                  )}
+                  {renderInput('email', 'Email', 'email', 'you@university.edu')}
+                  {renderInput('password', 'Password', 'password', 'Min 8 characters')}
+                  {renderInput('confirm', 'Confirm Password', 'password', 'Repeat password')}
                 </>
               )}
 
               <button
-                type="button"
-                onClick={handleSubmit}
+                type="submit"
                 disabled={loading}
-                className="mt-5 flex min-h-[46px] w-full items-center justify-center rounded-[10px] border-none bg-gradient-to-r from-violet-500 to-cyan-400 px-4 py-3 font-['Orbitron'] text-sm font-bold tracking-[1.5px] text-white shadow-[0_0_24px_rgba(124,92,252,0.4)] transition hover:-translate-y-0.5 hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+                className="mt-5 flex min-h-[46px] w-full items-center justify-center rounded-[10px] bg-gradient-to-r from-violet-500 to-cyan-400 px-4 py-3 font-['Orbitron'] text-sm font-bold tracking-[1.5px] text-white shadow-[0_0_24px_rgba(124,92,252,0.4)] transition hover:-translate-y-0.5 hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {loading ? (
                   <span className="h-[18px] w-[18px] animate-spin rounded-full border-2 border-white/30 border-t-white" />
@@ -669,9 +630,9 @@ export default function AuthPage() {
                 )}
               </button>
             </div>
-          </div>
+          </form>
         </section>
       </main>
-    </>
+    </div>
   );
 }
