@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
-import { checkAndIncrementUsage, getUsage } from '../lib/usageLimits';
+import { checkAndIncrementUsage, getUsage } from '../lib/usageLimit';
 import toast from 'react-hot-toast';
 
 /* ─── Quota Bar Component ─────────────────────────────────────────── */
