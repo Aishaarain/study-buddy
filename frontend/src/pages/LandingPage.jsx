@@ -7,7 +7,9 @@ export default function LandingPage() {
   const [selectedFeature, setSelectedFeature] = useState(null);
   const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
 
-  const clearSelection = useCallback(() => setSelectedFeature(null), []);
+  const clearSelection = useCallback(() => {
+    setSelectedFeature(null);
+  }, []);
 
   return (
     <main className="landing-page">
