@@ -96,8 +96,9 @@ export default function StudyScene({
   useEffect(() => {
     const mount = mountRef.current;
     const isMobile = /Android|iPhone|iPad/i.test(navigator.userAgent);
-    const particleCount = isMobile ? 120 : 280;
-    const bookParticleCount = isMobile ? 60 : 140;
+
+    const particleCount = isMobile ? 80 : 160;
+    const bookParticleCount = isMobile ? 35 : 80;
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
@@ -124,19 +125,19 @@ export default function StudyScene({
     controls.dampingFactor = 0.06;
     controls.minDistance = 5;
     controls.maxDistance = 20;
-    controls.autoRotate = true;
-    controls.autoRotateSpeed = 0.4;
+    controls.autoRotate = false;
+    controls.autoRotateSpeed = 0;
     controls.target.set(0, 0, 0);
     controls.maxPolarAngle = Math.PI * 0.7;
 
     const ambientLight = new THREE.AmbientLight(0x0a0520, 1.5);
     scene.add(ambientLight);
 
-    const purpleLight = new THREE.PointLight(0x7c5cfc, 6, 18);
+    const purpleLight = new THREE.PointLight(0x7c5cfc, 5, 18);
     purpleLight.position.set(-4, 6, 3);
     scene.add(purpleLight);
 
-    const cyanLight = new THREE.PointLight(0x00e5ff, 4, 16);
+    const cyanLight = new THREE.PointLight(0x00e5ff, 3.5, 16);
     cyanLight.position.set(5, -2, 4);
     scene.add(cyanLight);
 
@@ -144,7 +145,7 @@ export default function StudyScene({
     rimLight.position.set(-6, 4, -6);
     scene.add(rimLight);
 
-    const underLight = new THREE.PointLight(0x7c5cfc, 3, 8);
+    const underLight = new THREE.PointLight(0x7c5cfc, 2.5, 8);
     underLight.position.set(0, -1.8, 0);
     scene.add(underLight);
 
@@ -198,7 +199,7 @@ export default function StudyScene({
         new THREE.MeshBasicMaterial({
           color,
           transparent: true,
-          opacity: 0.18,
+          opacity: 0.12,
           depthWrite: false,
         })
       );
@@ -223,7 +224,7 @@ export default function StudyScene({
           roughness: 0.2,
           metalness: 0.5,
           emissive: 0x7c5cfc,
-          emissiveIntensity: 0.3,
+          emissiveIntensity: 0.25,
         })
       )
     );
@@ -233,7 +234,7 @@ export default function StudyScene({
       roughness: 0.15,
       metalness: 0.4,
       emissive: 0x7c5cfc,
-      emissiveIntensity: 0.15,
+      emissiveIntensity: 0.12,
       transparent: true,
       opacity: 0.9,
     });
@@ -294,17 +295,16 @@ export default function StudyScene({
     holoFrame.position.set(0, 0.3, -1.1);
     panelGroup.add(holoFrame);
 
-    panelGroup.add(
-      new THREE.Mesh(
-        new THREE.PlaneGeometry(2.4, 0.07),
-        new THREE.MeshBasicMaterial({
-          color: 0x1a0a3a,
-          transparent: true,
-          opacity: 0.8,
-        })
-      )
+    const progressTrack = new THREE.Mesh(
+      new THREE.PlaneGeometry(2.4, 0.07),
+      new THREE.MeshBasicMaterial({
+        color: 0x1a0a3a,
+        transparent: true,
+        opacity: 0.8,
+      })
     );
-    panelGroup.children[1].position.set(0, -0.82, -1.08);
+    progressTrack.position.set(0, -0.82, -1.08);
+    panelGroup.add(progressTrack);
 
     const pbFillMat = new THREE.MeshBasicMaterial({
       color: 0x7c5cfc,
@@ -339,9 +339,9 @@ export default function StudyScene({
       bpPos[i * 3 + 1] = Math.random() * 0.5;
       bpPos[i * 3 + 2] = (Math.random() - 0.5) * 0.8;
 
-      bpVel[i * 3] = (Math.random() - 0.5) * 0.003;
-      bpVel[i * 3 + 1] = 0.006 + Math.random() * 0.008;
-      bpVel[i * 3 + 2] = (Math.random() - 0.5) * 0.003;
+      bpVel[i * 3] = (Math.random() - 0.5) * 0.002;
+      bpVel[i * 3 + 1] = 0.004 + Math.random() * 0.006;
+      bpVel[i * 3 + 2] = (Math.random() - 0.5) * 0.002;
 
       bpAge[i] = Math.random();
     }
@@ -354,7 +354,7 @@ export default function StudyScene({
       color: 0xa78bfa,
       size: 0.025,
       transparent: true,
-      opacity: 0.85,
+      opacity: 0.75,
       sizeAttenuation: true,
       depthWrite: false,
     });
@@ -368,11 +368,27 @@ export default function StudyScene({
 
     const orbMeshes = [];
     const orbGlows = [];
-    const orbAngles = orbDefs.map((d) => d.angle);
     const orbScales = orbDefs.map(() => 1);
+
+    const orbBasePositions = orbDefs.map((def, idx) => {
+      const total = orbDefs.length;
+      const columns = isMobile ? 2 : Math.min(4, total);
+      const row = Math.floor(idx / columns);
+      const col = idx % columns;
+
+      const spacingX = isMobile ? 2.15 : 2.45;
+      const spacingY = isMobile ? 1.45 : 1.55;
+
+      const x = (col - (columns - 1) / 2) * spacingX;
+      const y = 2.35 - row * spacingY + def.yOff * 0.25;
+      const z = 0.25 + row * 0.22;
+
+      return new THREE.Vector3(x, y, z);
+    });
 
     orbDefs.forEach((def, idx) => {
       const group = new THREE.Group();
+      group.position.copy(orbBasePositions[idx]);
 
       const mesh = new THREE.Mesh(
         new THREE.SphereGeometry(0.55, 40, 40),
@@ -407,7 +423,7 @@ export default function StudyScene({
       group.add(ring);
       orbGlows.push(ring);
 
-      group.add(new THREE.PointLight(def.color, 1.8, 3.5));
+      group.add(new THREE.PointLight(def.color, 1.5, 3.5));
 
       const labelTexture = makeCanvasTextTexture(
         def.label,
@@ -473,7 +489,7 @@ export default function StudyScene({
       size: 0.22,
       vertexColors: true,
       transparent: true,
-      opacity: 0.75,
+      opacity: 0.65,
       sizeAttenuation: true,
       depthWrite: false,
     });
@@ -494,8 +510,8 @@ export default function StudyScene({
       scene.add(planet);
     }
 
-    makePlanet(-60, 20, -90, 14, 0x2a1060, 0.09);
-    makePlanet(70, -10, -120, 10, 0x003550, 0.07);
+    makePlanet(-60, 20, -90, 14, 0x2a1060, 0.07);
+    makePlanet(70, -10, -120, 10, 0x003550, 0.05);
 
     const raycaster = new THREE.Raycaster();
     const mouse = new THREE.Vector2(-9999, -9999);
@@ -525,11 +541,14 @@ export default function StudyScene({
         const worldPos = new THREE.Vector3();
         orbMeshes[selectedOrb].getWorldPosition(worldPos);
 
-        camera.position.lerp(worldPos.clone().add(new THREE.Vector3(0, 0.5, 2.5)), 0.1);
-        controls.target.lerp(worldPos, 0.1);
+        camera.position.lerp(
+          worldPos.clone().add(new THREE.Vector3(0, 0.55, 3.1)),
+          0.18
+        );
+        controls.target.lerp(worldPos, 0.18);
       } else {
         selectedOrb = null;
-        controls.autoRotate = !isPaused;
+        controls.autoRotate = false;
         onClearSelection();
       }
     };
@@ -541,13 +560,13 @@ export default function StudyScene({
         if (e.repeat) return;
 
         isPaused = !isPaused;
-        controls.autoRotate = !isPaused && selectedOrb === null;
+        controls.autoRotate = false;
       }
 
       if (e.code === 'Escape') {
         selectedOrb = null;
         isPaused = false;
-        controls.autoRotate = true;
+        controls.autoRotate = false;
 
         camera.position.set(0, 3.5, 10);
         controls.target.set(0, 0, 0);
@@ -570,9 +589,6 @@ export default function StudyScene({
     const clock = new THREE.Clock();
     let time = 0;
 
-    const camBasePos = new THREE.Vector3(0, 3.5, 10);
-    const camParallax = new THREE.Vector3();
-
     let animationFrame;
 
     function animate() {
@@ -583,14 +599,14 @@ export default function StudyScene({
       if (!isPaused) {
         time += delta;
 
-        platformGroup.position.y = Math.sin(time * (Math.PI * 2 / 3)) * 0.18;
+        platformGroup.position.y = Math.sin(time * (Math.PI * 2 / 4)) * 0.1;
 
-        const openAngle = (Math.sin(time * 0.6) * 0.5 + 0.5) * 1.1;
+        const openAngle = (Math.sin(time * 0.45) * 0.5 + 0.5) * 0.85;
         leftCoverGroup.rotation.y = -openAngle;
         rightCoverGroup.rotation.y = openAngle;
 
         for (let i = 0; i < bookParticleCount; i++) {
-          bpAge[i] += delta * (0.25 + Math.random() * 0.1);
+          bpAge[i] += delta * (0.2 + Math.random() * 0.08);
 
           if (bpAge[i] > 1) {
             resetBookParticle(i);
@@ -603,36 +619,46 @@ export default function StudyScene({
         }
 
         bookParticleGeo.attributes.position.needsUpdate = true;
-        bookParticleMat.opacity = 0.5 + 0.35 * Math.sin(time * 2.5);
+        bookParticleMat.opacity = 0.45 + 0.25 * Math.sin(time * 2);
 
         orbDefs.forEach((def, idx) => {
-          orbAngles[idx] += def.speed * delta;
+          const base = orbBasePositions[idx];
+          const orb = orbGroup.children[idx];
 
-          const x = Math.cos(orbAngles[idx]) * def.radius;
-          const z = Math.sin(orbAngles[idx]) * def.radius;
-          const y = def.yOff + Math.sin(time * 1.2 + idx) * 0.25;
+          const gentleFloatY = Math.sin(time * 1.1 + idx * 0.8) * 0.08;
+          const gentleFloatX = Math.sin(time * 0.7 + idx) * 0.035;
+          const hoverLift = idx === hoveredOrb ? 0.14 : 0;
 
-          orbGroup.children[idx].position.set(x, y, z);
+          const targetPosition = new THREE.Vector3(
+            base.x + gentleFloatX,
+            base.y + gentleFloatY + hoverLift,
+            base.z
+          );
+
+          orb.position.lerp(targetPosition, 0.08);
+
+          orb.rotation.y = Math.sin(time * 0.45 + idx) * 0.08;
+          orb.rotation.x = Math.sin(time * 0.35 + idx) * 0.04;
         });
 
-        pbFillMat.color.setHSL(0.72 + 0.08 * Math.sin(time * 0.8), 0.9, 0.55);
-        pbFill.position.x = -0.25 + 0.02 * Math.sin(time * 1.5);
+        pbFillMat.color.setHSL(0.72 + 0.05 * Math.sin(time * 0.8), 0.85, 0.55);
+        pbFill.position.x = -0.25 + 0.015 * Math.sin(time * 1.5);
 
-        purpleLight.intensity = 5 + 2 * Math.sin(time * 1.1);
-        cyanLight.intensity = 3.5 + 1.5 * Math.sin(time * 0.8 + 1.2);
-        underLight.intensity = 2 + 1.5 * Math.sin(time * 2);
+        purpleLight.intensity = 4.5 + 1.2 * Math.sin(time * 1.1);
+        cyanLight.intensity = 3.2 + 1 * Math.sin(time * 0.8 + 1.2);
+        underLight.intensity = 2 + 0.8 * Math.sin(time * 1.6);
 
         rimRingMat.color.setHSL(
-          0.72 + 0.05 * Math.sin(time * 0.5),
+          0.72 + 0.04 * Math.sin(time * 0.5),
           1,
-          0.5 + 0.15 * Math.sin(time * 2)
+          0.5 + 0.1 * Math.sin(time * 1.5)
         );
 
-        stars.rotation.y += 0.00004;
-        stars.rotation.x += 0.00002;
-        starMat.opacity = 0.6 + 0.15 * Math.sin(time * 0.3);
+        stars.rotation.y += 0.000025;
+        stars.rotation.x += 0.00001;
+        starMat.opacity = 0.55 + 0.1 * Math.sin(time * 0.3);
 
-        platformGroup.rotation.y += 0.0005;
+        platformGroup.rotation.y = Math.sin(time * 0.25) * 0.015;
       }
 
       orbGroup.children.forEach((orb) => {
@@ -655,24 +681,29 @@ export default function StudyScene({
       }
 
       orbMeshes.forEach((mesh, idx) => {
-        const targetScale = idx === hoveredOrb ? 1.25 : 1.0;
+        const targetScale = idx === hoveredOrb ? 1.22 : 1.0;
 
         orbScales[idx] += (targetScale - orbScales[idx]) * 0.1;
         orbGroup.children[idx].scale.setScalar(orbScales[idx]);
 
         const ring = orbGlows[idx];
-        ring.scale.setScalar(idx === hoveredOrb ? 1 + 0.08 * Math.sin(time * 6) : 1);
-        ring.material.opacity = idx === hoveredOrb ? 0.65 : 0.28;
+        ring.scale.setScalar(idx === hoveredOrb ? 1 + 0.06 * Math.sin(time * 5) : 1);
+        ring.material.opacity = idx === hoveredOrb ? 0.62 : 0.25;
 
-        mesh.material.emissiveIntensity = 0.25 + 0.12 * Math.sin(time * 2 + idx);
+        mesh.material.emissiveIntensity = 0.25 + 0.1 * Math.sin(time * 2 + idx);
       });
 
       if (!isPaused && selectedOrb === null) {
-        camParallax.x = -mouseNorm.x * 1.2;
-        camParallax.y = -mouseNorm.y * 0.8;
+        const targetCameraX = -mouseNorm.x * 0.65;
+        const targetCameraY = 3.5 - mouseNorm.y * 0.45;
 
-        camBasePos.x += (camParallax.x - camBasePos.x) * 0.02;
-        camBasePos.y += (camParallax.y + 3.5 - camBasePos.y) * 0.02;
+        camera.position.x += (targetCameraX - camera.position.x) * 0.025;
+        camera.position.y += (targetCameraY - camera.position.y) * 0.025;
+        camera.position.z += (10 - camera.position.z) * 0.025;
+
+        controls.target.x += (0 - controls.target.x) * 0.025;
+        controls.target.y += (0 - controls.target.y) * 0.025;
+        controls.target.z += (0 - controls.target.z) * 0.025;
       }
 
       controls.update();
