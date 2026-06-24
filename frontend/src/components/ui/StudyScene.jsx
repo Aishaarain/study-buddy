@@ -85,6 +85,47 @@ function makeChipTexture(label) {
   return new THREE.CanvasTexture(canvas);
 }
 
+function getOrbBasePosition(idx, total, isMobile, def) {
+  if (isMobile) {
+    const columns = 2;
+    const col = idx % columns;
+    const row = Math.floor(idx / columns);
+
+    const spacingX = 2.15;
+    const spacingY = 1.35;
+
+    return new THREE.Vector3(
+      (col - 0.5) * spacingX,
+      2.35 - row * spacingY + def.yOff * 0.18,
+      0.35 + row * 0.16
+    );
+  }
+
+  if (total === 5) {
+    const positions = [
+      [-2.7, 2.15, 0.35],
+      [0, 2.45, 0.25],
+      [2.7, 2.15, 0.35],
+      [-1.35, 0.75, 0.55],
+      [1.35, 0.75, 0.55],
+    ];
+
+    const [x, y, z] = positions[idx];
+
+    return new THREE.Vector3(x, y + def.yOff * 0.12, z);
+  }
+
+  const columns = Math.min(4, total);
+  const col = idx % columns;
+  const row = Math.floor(idx / columns);
+
+  return new THREE.Vector3(
+    (col - (columns - 1) / 2) * 2.45,
+    2.35 - row * 1.55 + def.yOff * 0.2,
+    0.35 + row * 0.2
+  );
+}
+
 export default function StudyScene({
   onHoverFeature,
   onSelectFeature,
@@ -370,21 +411,9 @@ export default function StudyScene({
     const orbGlows = [];
     const orbScales = orbDefs.map(() => 1);
 
-    const orbBasePositions = orbDefs.map((def, idx) => {
-      const total = orbDefs.length;
-      const columns = isMobile ? 2 : Math.min(4, total);
-      const row = Math.floor(idx / columns);
-      const col = idx % columns;
-
-      const spacingX = isMobile ? 2.15 : 2.45;
-      const spacingY = isMobile ? 1.45 : 1.55;
-
-      const x = (col - (columns - 1) / 2) * spacingX;
-      const y = 2.35 - row * spacingY + def.yOff * 0.25;
-      const z = 0.25 + row * 0.22;
-
-      return new THREE.Vector3(x, y, z);
-    });
+    const orbBasePositions = orbDefs.map((def, idx) =>
+      getOrbBasePosition(idx, orbDefs.length, isMobile, def)
+    );
 
     orbDefs.forEach((def, idx) => {
       const group = new THREE.Group();
@@ -588,7 +617,6 @@ export default function StudyScene({
 
     const clock = new THREE.Clock();
     let time = 0;
-
     let animationFrame;
 
     function animate() {
