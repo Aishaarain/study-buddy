@@ -10,13 +10,13 @@ function QuotaBar({ used, max }) {
   const isAtLimit = used >= max;
 
   return (
-    <div className="flex items-center gap-3">
-      <span className={`font-['Syne'] text-[11px] font-semibold ${
+    <div className="flex items-center gap-2 flex-shrink-0">
+      <span className={`font-['Syne'] text-[11px] font-semibold whitespace-nowrap ${
         isAtLimit ? 'text-red-400' : isNearLimit ? 'text-amber-400' : 'text-red-300/70'
       }`}>
         {used}/{max} sets today
       </span>
-      <div className="h-1.5 w-24 overflow-hidden rounded-full bg-red-400/15">
+      <div className="h-1.5 w-16 sm:w-24 overflow-hidden rounded-full bg-red-400/15 flex-shrink-0">
         <div
           className={`h-full rounded-full transition-all duration-500 ${
             isAtLimit ? 'bg-red-500' : isNearLimit ? 'bg-amber-400' : 'bg-gradient-to-r from-red-500 to-pink-400'
@@ -50,7 +50,6 @@ export default function Flashcards() {
     initUser();
   }, []);
 
-  // ── Fetch user & quota on mount ──
   const initUser = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
@@ -105,8 +104,6 @@ export default function Flashcards() {
 
   const handleGenerate = async () => {
     if (!selectedDocId) return toast.error('Select a document');
-
-    // ── Check quota before generating ──
     if (!userId) return;
     try {
       const usage = await checkAndIncrementUsage(userId, 'flashcard');
@@ -132,7 +129,6 @@ export default function Flashcards() {
       setStep('view');
     } catch (err) {
       toast.error(err.message || 'Generation failed');
-      // Roll back quota on failure
       setQuotaUsed((prev) => Math.max(prev - 1, 0));
     } finally {
       setLoading(false);
@@ -187,26 +183,24 @@ export default function Flashcards() {
   // ── Generate Step ──
   if (step === 'generate') {
     return (
-      <section className="min-h-screen p-8 text-white">
-        <h1 className="mb-2 font-orbitron text-3xl font-black tracking-[.15em]">
+      <section className="min-h-screen p-4 sm:p-8 text-white">
+        <h1 className="mb-2 font-orbitron text-2xl sm:text-3xl font-black tracking-[.15em]">
           GENERATE <span className="text-red-400">FLASHCARDS</span>
         </h1>
 
-        {/* Quota bar on generate page */}
-        <div className="mb-6 flex items-center gap-3">
+        <div className="mb-6 flex flex-wrap items-center gap-2 sm:gap-3">
           <QuotaBar used={quotaUsed} max={quotaMax} />
           <span className="text-[11px] text-slate-500">· Free tier: 3 sets/day</span>
         </div>
 
-        {/* Limit banner */}
         {isAtLimit && (
-          <div className="mb-6 rounded-2xl border border-red-400/30 bg-red-500/10 px-5 py-4 text-center">
+          <div className="mb-6 rounded-2xl border border-red-400/30 bg-red-500/10 px-4 py-4 text-center">
             <p className="text-sm font-bold text-red-300">🚫 You've used all 3 flashcard generations for today.</p>
             <p className="mt-1 text-xs text-slate-400">Your quota resets at midnight. Come back tomorrow!</p>
           </div>
         )}
 
-        <div className="mx-auto max-w-lg rounded-2xl border border-red-400/30 bg-red-400/5 p-8 backdrop-blur">
+        <div className="mx-auto max-w-lg rounded-2xl border border-red-400/30 bg-red-400/5 p-5 sm:p-8 backdrop-blur">
           <div className="mb-6">
             <label className="mb-2 block text-xs uppercase tracking-wider text-red-300 font-bold">Document</label>
             <select value={selectedDocId} onChange={(e) => setSelectedDocId(e.target.value)}
@@ -242,40 +236,40 @@ export default function Flashcards() {
   if (step === 'view' && activeSet) {
     const card = activeSet.cards[currentCard];
     return (
-      <section className="min-h-screen p-8 text-white">
+      <section className="min-h-screen p-4 sm:p-8 text-white">
         <div className="mx-auto max-w-lg">
           <div className="mb-6 text-center">
-            <h1 className="font-orbitron text-2xl font-bold text-red-300">{activeSet.title}</h1>
-            <p className="mt-1 text-md text-slate-400">{activeSet.cards.length} cards</p>
+            <h1 className="font-orbitron text-xl sm:text-2xl font-bold text-red-300 break-words">{activeSet.title}</h1>
+            <p className="mt-1 text-sm text-slate-400">{activeSet.cards.length} cards</p>
           </div>
 
-          <div className="flex flex-col items-center gap-6">
+          <div className="flex flex-col items-center gap-5">
             {/* Card with flip */}
             <div
               onClick={() => setFlipped((f) => !f)}
-              className="relative min-h-72 w-full cursor-pointer"
+              className="relative min-h-60 w-full cursor-pointer"
               style={{ perspective: '1000px' }}
             >
               <div
-                className="relative min-h-72 w-full rounded-2xl border border-red-400/30 bg-gradient-to-br from-red-500/20 to-pink-500/10 p-8 backdrop-blur flex flex-col items-center justify-center transition-transform duration-500"
+                className="relative min-h-60 w-full rounded-2xl border border-red-400/30 bg-gradient-to-br from-red-500/20 to-pink-500/10 p-6 backdrop-blur flex flex-col items-center justify-center transition-transform duration-500"
                 style={{ transformStyle: 'preserve-3d', transform: flipped ? 'rotateY(180deg)' : 'rotateY(0deg)' }}
               >
                 {/* Front */}
-                <div className="absolute inset-0 flex flex-col items-center justify-center p-8 text-center" style={{ backfaceVisibility: 'hidden' }}>
+                <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center" style={{ backfaceVisibility: 'hidden' }}>
                   <p className="mb-3 text-xs uppercase tracking-wider text-red-300/70 font-bold">Question</p>
-                  <p className="text-lg font-bold leading-relaxed text-slate-100">{card.front}</p>
-                  <p className="mt-6 text-xs text-red-300/30">Click to flip</p>
+                  <p className="text-base sm:text-lg font-bold leading-relaxed text-slate-100">{card.front}</p>
+                  <p className="mt-6 text-xs text-red-300/30">Tap to flip</p>
                 </div>
                 {/* Back */}
-                <div className="absolute inset-0 flex flex-col items-center justify-center p-8 text-center" style={{ backfaceVisibility: 'hidden', transform: 'rotateY(180deg)' }}>
+                <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center" style={{ backfaceVisibility: 'hidden', transform: 'rotateY(180deg)' }}>
                   <p className="mb-3 text-xs uppercase tracking-wider text-red-300/70 font-bold">Answer</p>
-                  <p className="text-base leading-relaxed text-slate-100">{card.back}</p>
-                  <p className="mt-6 text-xs text-red-300/30">Click to flip back</p>
+                  <p className="text-sm sm:text-base leading-relaxed text-slate-100">{card.back}</p>
+                  <p className="mt-6 text-xs text-red-300/30">Tap to flip back</p>
                 </div>
               </div>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 flex-wrap justify-center">
               <span className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs ${card.known ? 'bg-green-500/20 text-green-300' : 'bg-slate-500/20 text-slate-400'}`}>
                 {card.known ? '✓ Known' : 'Learning'}
               </span>
@@ -287,9 +281,9 @@ export default function Flashcards() {
               )}
             </div>
 
-            <div className="flex gap-4">
-              <button onClick={handlePrev} className="rounded-xl border border-red-400/30 bg-red-400/10 px-6 py-3 font-bold hover:bg-red-400/20 transition">← Prev</button>
-              <button onClick={handleNext} className="rounded-xl bg-gradient-to-r from-red-500 to-pink-500 px-6 py-3 font-bold transition hover:scale-105">Next →</button>
+            <div className="flex gap-3 w-full">
+              <button onClick={handlePrev} className="flex-1 rounded-xl border border-red-400/30 bg-red-400/10 px-4 py-3 font-bold hover:bg-red-400/20 transition text-sm">← Prev</button>
+              <button onClick={handleNext} className="flex-1 rounded-xl bg-gradient-to-r from-red-500 to-pink-500 px-4 py-3 font-bold transition hover:scale-105 text-sm">Next →</button>
             </div>
 
             {/* Progress bar */}
@@ -308,23 +302,25 @@ export default function Flashcards() {
 
   // ── List Step ──
   return (
-    <section className="min-h-screen p-8 text-white">
-      <div className="mb-8 flex items-center justify-between">
-        <div>
-          <h1 className="font-orbitron text-3xl font-black tracking-[.15em]">
+    <section className="min-h-screen p-4 sm:p-8 text-white">
+      {/* Header: stacks vertically on narrow screens */}
+      <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <h1 className="font-orbitron text-2xl sm:text-3xl font-black tracking-[.15em]">
             FLASH <span className="text-red-400">CARDS</span>
           </h1>
-          <div className="mt-2 flex items-center gap-3">
-            <p className="text-md text-slate-400">{sets.length} sets</p>
+          <div className="mt-2 flex flex-wrap items-center gap-2 sm:gap-3">
+            <p className="text-sm text-slate-400">{sets.length} sets</p>
             <span className="text-slate-600">·</span>
             <QuotaBar used={quotaUsed} max={quotaMax} />
           </div>
           <p className="mt-1 text-[11px] text-slate-500">Free tier: 3 flashcard sets/day</p>
         </div>
+
         <button
           onClick={() => { setStep('generate'); setGenerateForm({ count: 10 }); }}
           disabled={isAtLimit}
-          className="rounded-xl bg-gradient-to-r from-red-500 to-pink-500 px-6 py-3 font-bold transition hover:scale-105 shadow-[0_0_20px_rgba(255,107,107,.3)] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+          className="self-start sm:self-auto flex-shrink-0 rounded-xl bg-gradient-to-r from-red-500 to-pink-500 px-5 py-3 text-sm font-bold transition hover:scale-105 shadow-[0_0_20px_rgba(255,107,107,.3)] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 whitespace-nowrap"
         >
           {isAtLimit ? '🚫 Limit Reached' : '+ New Set'}
         </button>
@@ -335,11 +331,11 @@ export default function Flashcards() {
           <p className="text-slate-400">No flashcard sets yet.</p>
         </div>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {sets.map((set) => (
-            <div key={set._id} className="rounded-2xl border border-red-400/20 bg-red-400/5 p-6 backdrop-blur transition hover:bg-red-400/10">
-              <h3 className="font-orbitron text-md font-bold text-red-200 truncate">{set.title}</h3>
-              <p className="mt-2 text-md text-slate-400">{set.cards?.length || 0} cards</p>
+            <div key={set._id} className="rounded-2xl border border-red-400/20 bg-red-400/5 p-5 backdrop-blur transition hover:bg-red-400/10">
+              <h3 className="font-orbitron text-sm font-bold text-red-200 truncate">{set.title}</h3>
+              <p className="mt-2 text-sm text-slate-400">{set.cards?.length || 0} cards</p>
               <div className="mt-4 flex gap-2">
                 <button onClick={() => openSet(set)} className="flex-1 rounded-xl bg-gradient-to-r from-red-500 to-pink-500 px-4 py-2 text-xs font-bold transition hover:scale-105">
                   Study
